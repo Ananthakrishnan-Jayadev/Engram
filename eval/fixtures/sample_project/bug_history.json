@@ -1,0 +1,15 @@
+{
+  "project": "sample_project",
+  "fixes": [
+    {
+      "id": "fix-0001",
+      "title": "Checkout total dropped cents due to int() truncation",
+      "bug_description": "checkout() returned totals like 19.0 instead of 19.99 because the final amount was passed through int() before being returned, truncating the cents.",
+      "root_cause": "The total was cast with int(total) to 'clean up' floating point noise, which silently discarded the fractional part of every price.",
+      "fix": "Replaced int(total) with round(total, 2) so the cents are preserved while still removing floating-point noise.",
+      "files": ["cart.py"],
+      "commit": "a1b2c3d",
+      "verified": true
+    }
+  ]
+}
