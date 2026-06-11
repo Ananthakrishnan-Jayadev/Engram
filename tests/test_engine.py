@@ -27,9 +27,13 @@ CANNED_JSON = """[
 
 
 def _deterministic_vector(text: str) -> list[float]:
-    """Map `text` to a fixed-length vector; identical text -> identical vector."""
+    """Map `text` to a near-orthogonal vector; identical text -> identical vector.
+
+    Centring the bytes around zero makes distinct texts roughly orthogonal, so an
+    exact match dominates the combined (similarity + strength) ranking.
+    """
     digest = hashlib.sha256(text.encode("utf-8")).digest()
-    return [b / 255.0 for b in digest[:16]]
+    return [(b - 127.5) / 127.5 for b in digest[:32]]
 
 
 class FakeClient:

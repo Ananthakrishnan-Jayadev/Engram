@@ -1,8 +1,7 @@
 """FastMCP server for Engram.
 
-Phase 1 wires `remember`, `recall`, and `inspect` to a `MemoryEngine` (the
-extract → store → recall capture path). `bootstrap` and `answer` remain stubs
-for later phases.
+Wires `remember`, `recall`, `answer`, `inspect`, and `feedback` to a
+`MemoryEngine`. `bootstrap` remains a stub for Phase 3.
 """
 
 from __future__ import annotations
@@ -50,18 +49,35 @@ def remember(
 
 
 @mcp.tool()
-def recall(query: str, project_id: str = "default", k: int = 5) -> list[dict[str, Any]]:
-    """Return the `k` memories most relevant to `query` within `project_id`."""
-    return get_engine().recall(query, project_id=project_id, k=k)
+def recall(
+    query: str,
+    project_id: str = "default",
+    k: int = 5,
+    pack: bool = False,
+    token_budget: int = 1500,
+) -> list[dict[str, Any]] | dict[str, Any]:
+    """Return the `k` memories most relevant to `query` within `project_id`.
+
+    With `pack=True`, also returns a packed context under `token_budget`.
+    """
+    return get_engine().recall(
+        query, project_id=project_id, k=k, pack=pack, token_budget=token_budget
+    )
 
 
 @mcp.tool()
-def answer(question: str) -> dict[str, Any]:
-    """Answer `question` using recalled, verified project memory.
+def answer(question: str, project_id: str = "default") -> dict[str, Any]:
+    """Answer `question` from recalled project memory: {answer, used_memory_ids}."""
+    return get_engine().answer(question, project_id=project_id)
 
-    STUB (Phase 3): returns a placeholder answer.
-    """
-    return {"status": "stub", "tool": "answer", "question": question, "answer": None}
+
+@mcp.tool()
+def feedback(memory_id: str, helpful: bool) -> dict[str, Any]:
+    """Record a helpful/not-helpful signal for a memory and adjust its salience."""
+    updated = get_engine().feedback(memory_id, helpful)
+    if updated is None:
+        return {"status": "not_found", "memory_id": memory_id}
+    return {"status": "ok", "memory_id": memory_id, "salience": updated.salience}
 
 
 @mcp.tool()

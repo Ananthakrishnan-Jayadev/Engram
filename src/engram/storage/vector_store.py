@@ -53,6 +53,19 @@ class ChromaVectorStore(StorageInterface):
             for i, _id in enumerate(ids)
         ]
 
+    def query_candidates(
+        self, embedding: list[float], project_id: str, k: int
+    ) -> list[tuple[str, float]]:
+        """Return up to `k` neighbours within `project_id` (for supersession)."""
+        return self.query(embedding, k, where={"project_id": project_id})
+
+    def reset_project(self, project_id: str) -> None:
+        """Delete all vectors belonging to `project_id` (best-effort)."""
+        try:
+            self._collection.delete(where={"project_id": project_id})
+        except Exception:  # noqa: BLE001 - nothing to delete is not an error
+            pass
+
     # --- Metadata/graph ops live in SqliteMetadataStore -------------------
     def upsert_memory(self, record: Memory) -> None:
         """Not handled by the vector store (see SqliteMetadataStore)."""

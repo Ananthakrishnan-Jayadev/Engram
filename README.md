@@ -45,6 +45,9 @@ engram-mcp
 
 # Phase 1 capture demo (live key): remember a bug-fix session, then recall it
 python scripts/demo_capture.py
+
+# Phase 2 hero-story demo (live key): supersession + decay + answer + feedback
+python scripts/demo_engine.py
 ```
 
 ## Phase 1 usage — the capture path
@@ -77,14 +80,57 @@ print(engine.stats(project_id="my-project"))
 
 The same surface is exposed over MCP via the `remember`, `recall`, and `inspect` tools.
 
+## Phase 2 usage — the intelligence engine
+
+Phase 2 adds **salience**, **decay/forgetting**, **content-driven supersession**,
+**context-packing**, **answer synthesis**, and a **feedback loop**. `remember` now scores each
+memory's salience and, at write-time, detects when a new memory supersedes/contradicts/duplicates
+existing ones (marking them `superseded`). `recall` ranks active memories by
+`0.7*similarity + 0.3*effective_strength`, excludes superseded/forgotten entries, and reinforces
+what it returns.
+
+```python
+from engram.engine import MemoryEngine
+
+engine = MemoryEngine.from_settings()
+
+# Capture an original fix, then a refactor that supersedes it.
+engine.remember("Quick fix: try/except AttributeError around jwt.decode in auth.py", project_id="p")
+engine.remember("Refactor: a require_token() guard validates tokens up front, "
+                "superseding the try/except hack", project_id="p")
+
+# Recall returns only the still-valid memory (decayed/superseded ones are excluded).
+for hit in engine.recall("expired token handling", project_id="p"):
+    print(f"{hit['combined']:.3f}  [{hit['type']}] {hit['title']}")
+
+# Synthesize a grounded answer from packed memory.
+out = engine.answer("how do I handle expired tokens?", project_id="p")
+print(out["answer"], out["used_memory_ids"])
+
+# Recall with a packed, token-bounded context.
+packed = engine.recall("token handling", project_id="p", pack=True, token_budget=800)
+print(packed["context"]["est_tokens"], packed["context"]["included_ids"])
+
+# Feedback nudges salience; maintenance applies decay-driven status transitions.
+engine.feedback(out["used_memory_ids"][0], helpful=True)
+engine.maintenance(project_id="p")
+```
+
+MCP exposes `remember`, `recall` (with `pack`/`token_budget`), `answer`, `feedback`, and
+`inspect`. Decay constants (half-lives, thresholds) live in one block in
+`engram/intelligence/decay.py` so Phase 4 can learn them.
+
 ## Phase status
 
-**Functional now (Phase 0 + Phase 1):** config loading, the Qwen/DashScope client
-(chat + embeddings), the Chroma vector store (cosine, precomputed embeddings), the SQLite
-metadata store (records + JSON `details` + batch/count/dedup lookups), typed-memory models,
-memory **extraction**, the `MemoryEngine` capture path (`remember`/`recall`/`stats`), the
-MCP `remember`/`recall`/`inspect` tools, the smoke + demo scripts, tests, and CI.
+**Functional now (Phases 0–2):** config, the Qwen/DashScope client, the Chroma vector store
+(cosine, precomputed embeddings), the SQLite metadata store (records, JSON `details`, status /
+access tracking, feedback table, in-place `migrate()`), typed-memory models, extraction, and the
+`MemoryEngine` — `remember` (salience + supersession), `recall` (decay-aware ranking + packing),
+`answer` (recall → pack → synthesize), `feedback`, and `maintenance`. MCP tools: `remember`,
+`recall`, `answer`, `feedback`, `inspect`.
 
-**Still stubbed:** the MCP `bootstrap` and `answer` tools (placeholders), all engine
-mechanisms — salience, decay, supersession, context-packing, feedback, and knowledge-graph
-edges — and the eval metrics (`NotImplementedError("Phase 4")`).
+**Still stubbed / deferred:** the MCP `bootstrap` tool and code-edit-driven graph supersession
+(Phase 3), learned decay-rate tuning (Phase 4), the eval metrics
+(`NotImplementedError("Phase 4")`), and scheduled background consolidation (Phase 6 — Phase 2
+provides a callable `maintenance()` only). Answer does not yet verify a fix against current
+source (`# TODO Phase 3`).

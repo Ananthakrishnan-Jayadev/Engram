@@ -36,7 +36,8 @@ def main() -> None:
     """Run the remember -> recall capture demo."""
     try:
         engine = MemoryEngine.from_settings()
-        print("✅ Engine constructed from settings")
+        engine.reset_project(PROJECT_ID)  # clean slate so every run is identical
+        print("✅ Engine constructed from settings (project reset)")
     except Exception as exc:  # noqa: BLE001 - surface setup failures clearly
         print(f"❌ Could not construct engine: {exc}")
         return

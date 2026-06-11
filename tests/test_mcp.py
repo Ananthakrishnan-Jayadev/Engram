@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from engram.mcp import server
@@ -27,13 +29,27 @@ class FakeEngine:
             )
         ]
 
-    def recall(self, query: str, project_id: str = "default", k: int = 5) -> list[dict]:
+    def recall(
+        self, query: str, project_id: str = "default", k: int = 5,
+        pack: bool = False, token_budget: int = 1500,
+    ) -> list[dict[str, Any]]:
         """Return one canned recall result."""
         return [
             {"id": "m1", "type": "bug_fix", "title": "Auth crash", "body": "b", "score": 0.9}
         ]
 
-    def stats(self, project_id: str = "default") -> dict:
+    def answer(self, question: str, project_id: str = "default") -> dict[str, Any]:
+        """Return a canned synthesized answer."""
+        return {"answer": "validate before decode", "used_memory_ids": ["m1"]}
+
+    def feedback(self, memory_id: str, helpful: bool) -> Memory:
+        """Return a canned updated memory."""
+        return Memory(
+            id=memory_id, project_id="p1", type=MemoryType.BUG_FIX,
+            title="t", body="b", salience=0.7,
+        )
+
+    def stats(self, project_id: str = "default") -> dict[str, Any]:
         """Return canned stats."""
         return {"project_id": project_id, "total": 1, "by_type": {"bug_fix": 1}}
 
@@ -45,10 +61,10 @@ def test_server_name() -> None:
 
 @pytest.mark.asyncio
 async def test_tools_registered() -> None:
-    """All Phase 1 tools are registered."""
+    """All Phase 2 tools are registered."""
     tools = await server.mcp.list_tools()
     names = {tool.name for tool in tools}
-    assert {"bootstrap", "remember", "recall", "answer", "inspect"} <= names
+    assert {"bootstrap", "remember", "recall", "answer", "inspect", "feedback"} <= names
 
 
 def test_remember_shape(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -64,6 +80,22 @@ def test_recall_shape(monkeypatch: pytest.MonkeyPatch) -> None:
     out = server.recall("how did I fix auth")
     assert out
     assert set(out[0]) == {"id", "type", "title", "body", "score"}
+
+
+def test_answer_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    """answer returns a synthesized answer and used memory ids."""
+    monkeypatch.setattr(server, "_engine", FakeEngine())
+    out = server.answer("how do I handle expired tokens?")
+    assert out["answer"]
+    assert out["used_memory_ids"] == ["m1"]
+
+
+def test_feedback_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    """feedback returns an ok status with the updated salience."""
+    monkeypatch.setattr(server, "_engine", FakeEngine())
+    out = server.feedback("m1", helpful=True)
+    assert out["status"] == "ok"
+    assert out["salience"] == 0.7
 
 
 def test_inspect_shape(monkeypatch: pytest.MonkeyPatch) -> None:
