@@ -21,4 +21,5 @@ class Memory(BaseModel):
     salience: float = 1.0
     decay_state: str = "active"
     source: str = "unknown"
+    details: dict = {}
     embedding: list[float] | None = None

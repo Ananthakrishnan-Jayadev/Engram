@@ -30,8 +30,8 @@ class StorageInterface(ABC):
     @abstractmethod
     def query(
         self, embedding: list[float], k: int, where: dict[str, Any] | None = None
-    ) -> list[dict[str, Any]]:
-        """Return the `k` nearest stored vectors, optionally filtered by `where`."""
+    ) -> list[tuple[str, float]]:
+        """Return the `k` nearest stored vectors as (id, distance) pairs."""
 
     # --- Metadata / graph operations --------------------------------------
     @abstractmethod

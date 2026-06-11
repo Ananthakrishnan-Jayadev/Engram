@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime
 from typing import Any
@@ -40,8 +41,8 @@ class SqliteMetadataStore(StorageInterface):
                 """
                 INSERT INTO memories
                     (id, project_id, type, title, body, created_at,
-                     salience, decay_state, source)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     salience, decay_state, source, details)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     project_id = excluded.project_id,
                     type = excluded.type,
@@ -50,7 +51,8 @@ class SqliteMetadataStore(StorageInterface):
                     created_at = excluded.created_at,
                     salience = excluded.salience,
                     decay_state = excluded.decay_state,
-                    source = excluded.source
+                    source = excluded.source,
+                    details = excluded.details
                 """,
                 (
                     record.id,
@@ -62,6 +64,7 @@ class SqliteMetadataStore(StorageInterface):
                     record.salience,
                     record.decay_state,
                     record.source,
+                    json.dumps(record.details),
                 ),
             )
             conn.commit()
@@ -75,6 +78,43 @@ class SqliteMetadataStore(StorageInterface):
         if row is None:
             return None
         return self._row_to_memory(row)
+
+    def get_memories(self, ids: list[str]) -> list[Memory]:
+        """Batch-fetch memory records for `ids` (missing ids are skipped)."""
+        if not ids:
+            return []
+        placeholders = ",".join("?" * len(ids))
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM memories WHERE id IN ({placeholders})", ids
+            ).fetchall()
+        return [self._row_to_memory(row) for row in rows]
+
+    def count_by_type(self, project_id: str) -> dict[str, int]:
+        """Return a mapping of memory type -> count for `project_id`."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT type, COUNT(*) AS n
+                FROM memories WHERE project_id = ?
+                GROUP BY type
+                """,
+                (project_id,),
+            ).fetchall()
+        return {row["type"]: row["n"] for row in rows}
+
+    def find_by_key(self, project_id: str, type: str, title: str) -> Memory | None:
+        """Find a memory by its (project_id, type, title) key, for dedup."""
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM memories
+                WHERE project_id = ? AND type = ? AND title = ?
+                LIMIT 1
+                """,
+                (project_id, type, title),
+            ).fetchone()
+        return self._row_to_memory(row) if row is not None else None
 
     def add_edge(self, src: str, dst: str, kind: str) -> None:
         """Add a knowledge-graph edge (idempotent on the (src, dst, kind) key)."""
@@ -91,6 +131,11 @@ class SqliteMetadataStore(StorageInterface):
     @staticmethod
     def _row_to_memory(row: sqlite3.Row) -> Memory:
         """Convert a SQLite row into a `Memory` model."""
+        raw_details = row["details"] if "details" in row.keys() else None
+        try:
+            details = json.loads(raw_details) if raw_details else {}
+        except (json.JSONDecodeError, TypeError):
+            details = {}
         return Memory(
             id=row["id"],
             project_id=row["project_id"],
@@ -101,6 +146,7 @@ class SqliteMetadataStore(StorageInterface):
             salience=row["salience"],
             decay_state=row["decay_state"],
             source=row["source"],
+            details=details,
         )
 
     # --- Vector ops live in ChromaVectorStore -----------------------------
@@ -110,6 +156,6 @@ class SqliteMetadataStore(StorageInterface):
 
     def query(
         self, embedding: list[float], k: int, where: dict[str, Any] | None = None
-    ) -> list[dict[str, Any]]:
+    ) -> list[tuple[str, float]]:
         """Not handled by the metadata store (see ChromaVectorStore)."""
         raise NotImplementedError("Use ChromaVectorStore for vector queries.")

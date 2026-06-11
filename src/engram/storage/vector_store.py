@@ -27,6 +27,7 @@ class ChromaVectorStore(StorageInterface):
         self._collection = self._client.get_or_create_collection(
             name=_COLLECTION_NAME,
             embedding_function=None,
+            metadata={"hnsw:space": "cosine"},
         )
 
     def init(self) -> None:
@@ -38,8 +39,8 @@ class ChromaVectorStore(StorageInterface):
 
     def query(
         self, embedding: list[float], k: int, where: dict[str, Any] | None = None
-    ) -> list[dict[str, Any]]:
-        """Return up to `k` nearest matches, optionally filtered by `where`."""
+    ) -> list[tuple[str, float]]:
+        """Return up to `k` nearest matches as (id, cosine_distance) pairs."""
         result = self._collection.query(
             query_embeddings=[embedding],
             n_results=k,
@@ -47,17 +48,10 @@ class ChromaVectorStore(StorageInterface):
         )
         ids = result.get("ids", [[]])[0]
         distances = (result.get("distances") or [[]])[0]
-        metadatas = (result.get("metadatas") or [[]])[0]
-        hits: list[dict[str, Any]] = []
-        for i, _id in enumerate(ids):
-            hits.append(
-                {
-                    "id": _id,
-                    "distance": distances[i] if i < len(distances) else None,
-                    "metadata": metadatas[i] if i < len(metadatas) else None,
-                }
-            )
-        return hits
+        return [
+            (_id, float(distances[i]) if i < len(distances) else 1.0)
+            for i, _id in enumerate(ids)
+        ]
 
     # --- Metadata/graph ops live in SqliteMetadataStore -------------------
     def upsert_memory(self, record: Memory) -> None:

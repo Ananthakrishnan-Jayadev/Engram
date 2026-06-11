@@ -76,8 +76,8 @@ def main() -> None:
             vstore = ChromaVectorStore(path=str(tmp_path / "chroma"))
             vstore.add_vector("smoke-1", vector, {"project_id": "smoke"})
             hits = vstore.query(vector, k=1)
-            assert hits and hits[0]["id"] == "smoke-1", "round-trip mismatch"
-            print(f"✅ 4. Chroma round-trip ok (got id={hits[0]['id']})")
+            assert hits and hits[0][0] == "smoke-1", "round-trip mismatch"
+            print(f"✅ 4. Chroma round-trip ok (got id={hits[0][0]})")
             results["chroma"] = True
         except Exception as exc:  # noqa: BLE001
             print(f"❌ 4. Chroma round-trip failed: {exc}")

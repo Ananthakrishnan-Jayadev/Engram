@@ -18,7 +18,7 @@ def test_chroma_add_and_query(tmp_path: Path) -> None:
 
     hits = store.query([0.1, 0.2, 0.3], k=1)
     assert hits
-    assert hits[0]["id"] == "m1"
+    assert hits[0][0] == "m1"
 
 
 def test_chroma_query_with_where(tmp_path: Path) -> None:
@@ -28,7 +28,7 @@ def test_chroma_query_with_where(tmp_path: Path) -> None:
     store.add_vector("m2", [0.11, 0.21, 0.31], {"type": "convention"})
 
     hits = store.query([0.1, 0.2, 0.3], k=5, where={"type": "convention"})
-    assert [h["id"] for h in hits] == ["m2"]
+    assert [hit_id for hit_id, _ in hits] == ["m2"]
 
 
 def test_sqlite_upsert_and_get(tmp_path: Path) -> None:
@@ -69,3 +69,40 @@ def test_sqlite_add_edge_is_idempotent(tmp_path: Path) -> None:
     store.init()
     store.add_edge("m1", "m2", "supersedes")
     store.add_edge("m1", "m2", "supersedes")
+
+
+def test_sqlite_details_roundtrip(tmp_path: Path) -> None:
+    """The JSON `details` payload survives a store/fetch cycle."""
+    store = SqliteMetadataStore(path=str(tmp_path / "engram.sqlite"))
+    store.init()
+    mem = Memory(
+        id="m1",
+        project_id="p1",
+        type=MemoryType.BUG_FIX,
+        title="Auth crash",
+        body="Null token.",
+        details={"symptom": "crash", "root_cause": "None", "fix": "guard"},
+    )
+    store.upsert_memory(mem)
+    fetched = store.get_memory("m1")
+    assert fetched is not None
+    assert fetched.details == {"symptom": "crash", "root_cause": "None", "fix": "guard"}
+
+
+def test_sqlite_batch_count_and_find(tmp_path: Path) -> None:
+    """get_memories, count_by_type, and find_by_key behave as expected."""
+    store = SqliteMetadataStore(path=str(tmp_path / "engram.sqlite"))
+    store.init()
+    a = Memory(id="a", project_id="p1", type=MemoryType.BUG_FIX, title="A", body="b")
+    b = Memory(id="b", project_id="p1", type=MemoryType.CONVENTION, title="B", body="b")
+    store.upsert_memory(a)
+    store.upsert_memory(b)
+
+    fetched = store.get_memories(["a", "b", "missing"])
+    assert {m.id for m in fetched} == {"a", "b"}
+
+    assert store.count_by_type("p1") == {"bug_fix": 1, "convention": 1}
+
+    found = store.find_by_key("p1", "bug_fix", "A")
+    assert found is not None and found.id == "a"
+    assert store.find_by_key("p1", "bug_fix", "nope") is None

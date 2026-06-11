@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS memories (
     created_at  TEXT NOT NULL,
     salience    REAL NOT NULL DEFAULT 1.0,
     decay_state TEXT NOT NULL DEFAULT 'active',
-    source      TEXT NOT NULL DEFAULT 'unknown'
+    source      TEXT NOT NULL DEFAULT 'unknown',
+    details     TEXT NOT NULL DEFAULT '{}'
 );
 """
 

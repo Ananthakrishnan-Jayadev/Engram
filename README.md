@@ -42,15 +42,49 @@ pytest -q
 
 # Start the MCP server over stdio
 engram-mcp
+
+# Phase 1 capture demo (live key): remember a bug-fix session, then recall it
+python scripts/demo_capture.py
 ```
 
-## Phase 0 status
+## Phase 1 usage — the capture path
 
-This repository is at **Phase 0 — scaffolding only**. The following are *functional*:
-config loading, the Qwen/DashScope client (chat + embeddings), the Chroma vector store, the
-SQLite metadata store, the typed-memory data models, an MCP server that starts and registers
-tools, the smoke script, basic tests, and CI.
+Phase 1 implements **extract → store → recall**. The `MemoryEngine` reads raw content
+(a chat log, a diff, notes), asks Qwen to extract typed memories, embeds and stores them,
+and recalls them semantically.
 
-The memory **engine logic is not implemented yet** — salience, decay, supersession,
-context-packing, and feedback are stubbed (`NotImplementedError("Phase 2")`), the MCP tools
-return placeholders, and the eval metrics raise `NotImplementedError("Phase 4")`.
+```python
+from engram.engine import MemoryEngine
+
+engine = MemoryEngine.from_settings()
+
+# Extract + store typed memories from a session snippet.
+stored = engine.remember(
+    "Fixed a NoneType crash in auth.py: get_token() returned None on an "
+    "expired token; added a null-check before jwt.decode().",
+    project_id="my-project",
+)
+for m in stored:
+    print(m.type.value, "-", m.title)
+
+# Recall semantically.
+for hit in engine.recall("how did I fix the auth crash", project_id="my-project"):
+    print(f"{hit['score']:.3f}  [{hit['type']}] {hit['title']}")
+
+# Counts per type.
+print(engine.stats(project_id="my-project"))
+```
+
+The same surface is exposed over MCP via the `remember`, `recall`, and `inspect` tools.
+
+## Phase status
+
+**Functional now (Phase 0 + Phase 1):** config loading, the Qwen/DashScope client
+(chat + embeddings), the Chroma vector store (cosine, precomputed embeddings), the SQLite
+metadata store (records + JSON `details` + batch/count/dedup lookups), typed-memory models,
+memory **extraction**, the `MemoryEngine` capture path (`remember`/`recall`/`stats`), the
+MCP `remember`/`recall`/`inspect` tools, the smoke + demo scripts, tests, and CI.
+
+**Still stubbed:** the MCP `bootstrap` and `answer` tools (placeholders), all engine
+mechanisms — salience, decay, supersession, context-packing, feedback, and knowledge-graph
+edges — and the eval metrics (`NotImplementedError("Phase 4")`).
