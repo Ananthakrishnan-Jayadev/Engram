@@ -15,6 +15,9 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from engram.code.bootstrap import run_bootstrap
+from engram.code.entities import match_entities
+from engram.code.sync import run_sync
 from engram.config import Settings, get_settings
 from engram.intelligence.decay import effective_strength, next_status
 from engram.intelligence.feedback import apply_feedback
@@ -40,6 +43,7 @@ MAX_SUPERSEDED_PER_INSERT = 2
 CANDIDATE_K = 6
 RECALL_FETCH_BUFFER = 10
 DEFAULT_TOKEN_BUDGET = 1500
+ENTITY_LINK_BOOST = 0.3
 
 # answer() never grounds on rejected approaches (and active-only already
 # excludes superseded). Allowed grounding types: architecture, convention,
@@ -132,8 +136,25 @@ class MemoryEngine:
         for memory, embedding in prepared:
             self._resolve_supersession(memory, embedding, project_id, exclude_ids=sibling_ids)
             self._meta.upsert_memory(memory)  # persist any status change (e.g. dup-merge)
+            self._link_entities(memory, project_id)
 
         return [mem for mem, _ in prepared]
+
+    def _link_entities(self, memory: Memory, project_id: str) -> None:
+        """Resolve a memory's entity hints against scanned entities and link them.
+
+        If the project has not been scanned yet (no entities), hints remain in
+        details["entity_hints"] for later backfill during bootstrap/sync.
+        """
+        hints = memory.details.get("entity_hints")
+        if not isinstance(hints, list) or not hints:
+            return
+        entities = self._meta.list_entities(project_id)
+        if not entities:
+            return
+        for hint in hints:
+            for entity_key in match_entities(hint, entities):
+                self._meta.link_memory_entity(memory.id, entity_key, project_id)
 
     def _resolve_supersession(
         self,
@@ -220,13 +241,16 @@ class MemoryEngine:
         pack: bool = False,
         token_budget: int = DEFAULT_TOKEN_BUDGET,
         exclude_types: list[str] | None = None,
+        entity: str | None = None,
     ) -> list[dict[str, Any]] | dict[str, Any]:
         """Rank active memories by 0.7*similarity + 0.3*strength and reinforce them.
 
-        `exclude_types` drops memories of those types. With `pack=True`, also
-        returns a budget-bounded packed context.
+        `exclude_types` drops memories of those types. `entity` boosts memories
+        linked to that code entity. With `pack=True`, also returns a
+        budget-bounded packed context.
         """
         excluded = set(exclude_types or [])
+        linked_ids = set(self._meta.memories_for_entity(entity)) if entity else set()
         embedding = self._client.embed([query])[0]
         hits = self._vectors.query(
             embedding, k + RECALL_FETCH_BUFFER, where={"project_id": project_id}
@@ -242,6 +266,9 @@ class MemoryEngine:
             similarity = 1.0 - distances.get(record.id, 1.0)
             strength = effective_strength(record, now)
             combined = SIMILARITY_WEIGHT * similarity + STRENGTH_WEIGHT * strength
+            linked = record.id in linked_ids
+            if linked:
+                combined += ENTITY_LINK_BOOST
             results.append(
                 {
                     "id": record.id,
@@ -251,6 +278,7 @@ class MemoryEngine:
                     "score": similarity,
                     "strength": strength,
                     "combined": combined,
+                    "linked": linked,
                 }
             )
         results.sort(key=lambda r: r["combined"], reverse=True)
@@ -344,3 +372,17 @@ class MemoryEngine:
             "total": sum(by_type.values()),
             "by_type": by_type,
         }
+
+    # --- Code-aware bootstrap + sync (Phase 3) ----------------------------
+    def bootstrap(self, project_path: str, project_id: str = "default") -> dict[str, Any]:
+        """Build initial memory from a project's code, docs, and git history."""
+        return run_bootstrap(self, project_id, project_path)
+
+    def sync_code(self, project_path: str, project_id: str = "default") -> dict[str, Any]:
+        """Re-scan code and recheck memories whose linked entities changed."""
+        return run_sync(self, project_id, project_path)
+
+    def backfill_entity_links(self, project_id: str = "default") -> None:
+        """Resolve and link stashed entity hints for every memory in `project_id`."""
+        for memory in self._meta.all_memories(project_id):
+            self._link_entities(memory, project_id)

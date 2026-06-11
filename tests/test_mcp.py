@@ -64,7 +64,8 @@ async def test_tools_registered() -> None:
     """All Phase 2 tools are registered."""
     tools = await server.mcp.list_tools()
     names = {tool.name for tool in tools}
-    assert {"bootstrap", "remember", "recall", "answer", "inspect", "feedback"} <= names
+    expected = {"bootstrap", "sync", "remember", "recall", "answer", "inspect", "feedback"}
+    assert expected <= names
 
 
 def test_remember_shape(monkeypatch: pytest.MonkeyPatch) -> None:

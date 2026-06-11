@@ -8,6 +8,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from engram.code.entities import CodeEntity
 from engram.config import get_settings
 from engram.memory.models import Memory
 from engram.memory.types import MemoryType
@@ -205,6 +206,8 @@ class SqliteMetadataStore(StorageInterface):
                 )
             ]
             conn.execute("DELETE FROM memories WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM code_entities WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM memory_entities WHERE project_id = ?", (project_id,))
             if ids:
                 placeholders = ",".join("?" * len(ids))
                 conn.execute(
@@ -216,6 +219,108 @@ class SqliteMetadataStore(StorageInterface):
                     f"DELETE FROM feedback WHERE memory_id IN ({placeholders})", ids
                 )
             conn.commit()
+
+    # --- Code knowledge graph --------------------------------------------
+    def upsert_entity(self, entity: CodeEntity) -> None:
+        """Insert or update a code entity (keyed by entity_key)."""
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO code_entities
+                    (entity_key, project_id, path, qualname, kind, source_hash, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(entity_key) DO UPDATE SET
+                    project_id = excluded.project_id,
+                    path = excluded.path,
+                    qualname = excluded.qualname,
+                    kind = excluded.kind,
+                    source_hash = excluded.source_hash,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    entity.entity_key,
+                    entity.project_id,
+                    entity.path,
+                    entity.qualname,
+                    entity.kind,
+                    entity.source_hash,
+                    entity.updated_at.isoformat(),
+                ),
+            )
+            conn.commit()
+
+    def get_entity(self, entity_key: str) -> CodeEntity | None:
+        """Fetch a code entity by key, or None."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM code_entities WHERE entity_key = ?", (entity_key,)
+            ).fetchone()
+        return self._row_to_entity(row) if row is not None else None
+
+    def list_entities(self, project_id: str) -> list[CodeEntity]:
+        """Return all code entities for `project_id`."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM code_entities WHERE project_id = ?", (project_id,)
+            ).fetchall()
+        return [self._row_to_entity(row) for row in rows]
+
+    def link_memory_entity(self, memory_id: str, entity_key: str, project_id: str) -> None:
+        """Link a memory to a code entity (idempotent)."""
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO memory_entities (memory_id, entity_key, project_id)
+                VALUES (?, ?, ?)
+                """,
+                (memory_id, entity_key, project_id),
+            )
+            conn.commit()
+
+    def memories_for_entity(self, entity_key: str) -> list[str]:
+        """Return memory ids linked to `entity_key`."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT memory_id FROM memory_entities WHERE entity_key = ?", (entity_key,)
+            ).fetchall()
+        return [row["memory_id"] for row in rows]
+
+    def entities_for_memory(self, memory_id: str) -> list[str]:
+        """Return entity keys linked to `memory_id`."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT entity_key FROM memory_entities WHERE memory_id = ?", (memory_id,)
+            ).fetchall()
+        return [row["entity_key"] for row in rows]
+
+    def count_links(self, project_id: str) -> int:
+        """Return the number of memory<->entity links for `project_id`."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS n FROM memory_entities WHERE project_id = ?",
+                (project_id,),
+            ).fetchone()
+        return int(row["n"]) if row is not None else 0
+
+    def delete_entity(self, entity_key: str) -> None:
+        """Remove a code entity and any links pointing at it."""
+        with self._connect() as conn:
+            conn.execute("DELETE FROM code_entities WHERE entity_key = ?", (entity_key,))
+            conn.execute("DELETE FROM memory_entities WHERE entity_key = ?", (entity_key,))
+            conn.commit()
+
+    @staticmethod
+    def _row_to_entity(row: sqlite3.Row) -> CodeEntity:
+        """Convert a SQLite row into a `CodeEntity` model."""
+        return CodeEntity(
+            entity_key=row["entity_key"],
+            project_id=row["project_id"],
+            path=row["path"],
+            qualname=row["qualname"],
+            kind=row["kind"],
+            source_hash=row["source_hash"],
+            updated_at=datetime.fromisoformat(row["updated_at"]),
+        )
 
     def add_edge(self, src: str, dst: str, kind: str) -> None:
         """Add a knowledge-graph edge (idempotent on the (src, dst, kind) key)."""

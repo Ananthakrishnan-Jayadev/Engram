@@ -38,10 +38,33 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 """
 
+CREATE_CODE_ENTITIES_TABLE = """
+CREATE TABLE IF NOT EXISTS code_entities (
+    entity_key  TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL,
+    path        TEXT NOT NULL,
+    qualname    TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    source_hash TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+"""
+
+CREATE_MEMORY_ENTITIES_TABLE = """
+CREATE TABLE IF NOT EXISTS memory_entities (
+    memory_id  TEXT NOT NULL,
+    entity_key TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    PRIMARY KEY (memory_id, entity_key)
+);
+"""
+
 SCHEMA_STATEMENTS: tuple[str, ...] = (
     CREATE_MEMORIES_TABLE,
     CREATE_EDGES_TABLE,
     CREATE_FEEDBACK_TABLE,
+    CREATE_CODE_ENTITIES_TABLE,
+    CREATE_MEMORY_ENTITIES_TABLE,
 )
 
 # Columns that migrate() can add in-place to an existing `memories` table.

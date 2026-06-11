@@ -23,6 +23,8 @@ Return ONLY a JSON array. Each element must be an object with these keys:
   - "details": a type-specific object. For "bug_fix" use
     {{"symptom": ..., "root_cause": ..., "fix": ...}}. For other types use a
     small object with any relevant fields, or {{}} if none.
+  - "entities": a list of strings naming the files or code symbols this memory
+    concerns (e.g. "auth.py", "TokenStore", "authenticate"). Use [] if unsure.
 
 Rules:
   - Output the JSON array and nothing else (no ```json fences, no commentary).
@@ -159,3 +161,54 @@ CONTEXT:
 def build_answer_prompt(question: str, context: str) -> str:
     """Render the answer-synthesis prompt from recalled `context`."""
     return _ANSWER_TEMPLATE.format(question=question, context=context)
+
+
+# --- Code recheck (sync) -------------------------------------------------
+
+CODE_RECHECK_SYSTEM = (
+    "You decide whether a stored project memory is still valid given the "
+    "current source of the code it concerns. You output ONLY a JSON object."
+)
+
+_CODE_RECHECK_TEMPLATE = """\
+A memory is linked to a code entity whose source may have changed (or been
+removed). Decide whether the memory still holds for the CURRENT SOURCE.
+
+relation must be one of:
+  - "still_valid": the memory is still accurate
+  - "needs_update": mostly right, but some specific detail is now stale
+  - "outdated": the memory's specific claim is now factually FALSE and it
+    should be retired
+
+Be conservative. PREFER "needs_update" over "outdated". Only choose "outdated"
+when the memory's concrete claim is contradicted by the current source. An
+implementation change *inside* a function (renamed locals, refactored body,
+tweaked arithmetic) does NOT invalidate an architecture, convention, or
+coupling claim unless the change actually removes or alters the described
+relationship. When unsure, choose "needs_update", not "outdated".
+
+Return ONLY: {{"relation": "<relation>", "confidence": <float 0..1>,
+  "rationale": "<one short line>"}}
+
+MEMORY
+  type:  {mem_type}
+  title: {mem_title}
+  body:  {mem_body}
+
+ENTITY: {entity_key}
+CURRENT SOURCE:
+{source}
+"""
+
+
+def build_code_recheck_prompt(
+    mem_type: str, mem_title: str, mem_body: str, entity_key: str, source: str
+) -> str:
+    """Render the recheck prompt comparing a memory against current source."""
+    return _CODE_RECHECK_TEMPLATE.format(
+        mem_type=mem_type,
+        mem_title=mem_title,
+        mem_body=mem_body,
+        entity_key=entity_key,
+        source=source,
+    )

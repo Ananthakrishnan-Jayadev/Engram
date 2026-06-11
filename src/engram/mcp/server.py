@@ -1,7 +1,7 @@
 """FastMCP server for Engram.
 
-Wires `remember`, `recall`, `answer`, `inspect`, and `feedback` to a
-`MemoryEngine`. `bootstrap` remains a stub for Phase 3.
+Wires `bootstrap`, `sync`, `remember`, `recall`, `answer`, `inspect`, and
+`feedback` to a `MemoryEngine`.
 """
 
 from __future__ import annotations
@@ -28,12 +28,21 @@ def get_engine() -> MemoryEngine:
 
 
 @mcp.tool()
-def bootstrap(project_path: str) -> dict[str, Any]:
-    """Scan a project at `project_path` and build its initial typed memory.
+def bootstrap(project_path: str, project_id: str = "default") -> dict[str, Any]:
+    """Scan a project's code, docs, and git history into initial memory.
 
-    STUB (Phase 3): returns a placeholder. No scanning is performed yet.
+    Returns {entities, memories_by_type, links}.
     """
-    return {"status": "stub", "tool": "bootstrap", "project_path": project_path}
+    return get_engine().bootstrap(project_path, project_id=project_id)
+
+
+@mcp.tool()
+def sync(project_path: str, project_id: str = "default") -> dict[str, Any]:
+    """Re-scan code and recheck memories whose linked entities changed.
+
+    Returns {changed, removed, new, rechecked, superseded, flagged}.
+    """
+    return get_engine().sync_code(project_path, project_id=project_id)
 
 
 @mcp.tool()

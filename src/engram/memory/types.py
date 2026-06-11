@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class MemoryType(str, Enum):
+class MemoryType(StrEnum):
     """The kinds of project knowledge Engram stores."""
 
     ARCHITECTURE = "architecture"

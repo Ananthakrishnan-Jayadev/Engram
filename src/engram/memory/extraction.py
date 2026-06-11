@@ -64,6 +64,11 @@ def _coerce_items(items: list[Any], project_id: str, source: str) -> list[Memory
         details = item.get("details")
         if not isinstance(details, dict):
             details = {}
+        entities = item.get("entities")
+        if isinstance(entities, list):
+            hints = [e.strip() for e in entities if isinstance(e, str) and e.strip()]
+            if hints:
+                details = {**details, "entity_hints": hints}
         memories.append(
             Memory(
                 id=uuid.uuid4().hex,
