@@ -22,6 +22,7 @@ from engram.config import Settings, get_settings
 from engram.intelligence.decay import effective_strength, next_status
 from engram.intelligence.feedback import apply_feedback
 from engram.intelligence.packing import PackedContext, pack
+from engram.intelligence.policy import ForgettingPolicy
 from engram.intelligence.salience import score_memory
 from engram.intelligence.supersession import check_supersession
 from engram.llm.client import QwenClient
@@ -35,14 +36,10 @@ from engram.storage.vector_store import ChromaVectorStore
 
 logger = logging.getLogger(__name__)
 
-# Ranking + supersession tuning.
-SIMILARITY_WEIGHT = 0.7
-STRENGTH_WEIGHT = 0.3
-SUPERSEDE_MIN_CONFIDENCE = 0.7
+# Structural tuning (not part of the learnable ForgettingPolicy).
 MAX_SUPERSEDED_PER_INSERT = 2
 CANDIDATE_K = 6
 RECALL_FETCH_BUFFER = 10
-DEFAULT_TOKEN_BUDGET = 1500
 ENTITY_LINK_BOOST = 0.3
 
 # answer() never grounds on rejected approaches (and active-only already
@@ -75,23 +72,41 @@ class MemoryEngine:
         vector_store: ChromaVectorStore,
         metadata_store: SqliteMetadataStore,
         settings: Settings | None,
+        policy: ForgettingPolicy | None = None,
     ) -> None:
-        """Wire the engine to its client and stores and initialise the stores."""
+        """Wire the engine to its client and stores and initialise the stores.
+
+        `policy` holds the tunable forgetting/ranking constants; it defaults to
+        the current hand-set values so behaviour is unchanged.
+        """
         self._client = client
         self._vectors = vector_store
         self._meta = metadata_store
         self._settings = settings
+        self._policy = policy or ForgettingPolicy.default()
         self._meta.init()
         self._vectors.init()
 
+    @property
+    def policy(self) -> ForgettingPolicy:
+        """The engine's active forgetting policy."""
+        return self._policy
+
+    @policy.setter
+    def policy(self, value: ForgettingPolicy) -> None:
+        """Swap the engine's forgetting policy (used by tuning)."""
+        self._policy = value
+
     @classmethod
-    def from_settings(cls, settings: Settings | None = None) -> MemoryEngine:
+    def from_settings(
+        cls, settings: Settings | None = None, policy: ForgettingPolicy | None = None
+    ) -> MemoryEngine:
         """Build an engine (client + both stores) from `settings`."""
         settings = settings or get_settings()
         client = QwenClient(settings)
         vector_store = ChromaVectorStore(path=settings.chroma_path)
         metadata_store = SqliteMetadataStore(path=settings.sqlite_path)
-        return cls(client, vector_store, metadata_store, settings)
+        return cls(client, vector_store, metadata_store, settings, policy=policy)
 
     def reset_project(self, project_id: str) -> None:
         """Delete all stored state for `project_id` (metadata, edges, feedback, vectors)."""
@@ -165,11 +180,17 @@ class MemoryEngine:
     ) -> None:
         """Apply guarded, content-driven supersession verdicts for a new memory.
 
-        The new memory may supersede candidates, never the reverse. We exclude
-        the memory's own id and all same-batch siblings, require confidence
-        >= 0.7, never let a rejected_approach supersede a non-rejected memory,
-        protect strictly-higher-salience candidates, treat duplicates as a
-        salience-based merge (no edge), and cap supersessions per insert.
+        Guards, in order of authority:
+          - self/twin and same-batch siblings are never superseded;
+          - confidence must be >= the policy threshold;
+          - temporal direction (primary): only an OLDER candidate may be
+            superseded by the newer memory — never retire a candidate that is
+            newer than (or the same age as) the new memory;
+          - same-claim: the candidate must be the same type to be replaced
+            (a detail/note never supersedes a general version and vice versa);
+          - a rejected_approach can only relate to another rejected_approach;
+          - strictly-higher-salience candidates are protected.
+        Duplicates merge by recency (keep the newer; mark the older superseded).
         """
         exclude = set(exclude_ids or ())
         exclude.add(memory.id)
@@ -192,7 +213,7 @@ class MemoryEngine:
                 continue  # unknown candidate, or self/twin — never supersede
             if verdict.relation == "unrelated":
                 continue
-            if verdict.confidence < SUPERSEDE_MIN_CONFIDENCE:
+            if verdict.confidence < self._policy.supersede_min_confidence:
                 logger.info(
                     "supersession skipped: low confidence %.2f for %s",
                     verdict.confidence, target.id,
@@ -200,6 +221,19 @@ class MemoryEngine:
                 continue
 
             if verdict.relation in ("supersedes", "contradicts"):
+                # Temporal direction (primary): only an older candidate can be
+                # retired by a newer memory — never the reverse.
+                if target.created_at >= memory.created_at:
+                    logger.info("supersession blocked: candidate %s not older", target.id)
+                    continue
+                # Same-claim: only replace a candidate of the same type (a
+                # detail/note never supersedes a general version, etc.).
+                if target.type is not memory.type:
+                    logger.info(
+                        "supersession blocked: different type (%s vs %s) for %s",
+                        memory.type.value, target.type.value, target.id,
+                    )
+                    continue
                 # Type authority: a rejected_approach can only relate to another
                 # rejected_approach — never retire real knowledge.
                 if (
@@ -211,7 +245,7 @@ class MemoryEngine:
                         target.id,
                     )
                     continue
-                # Directional guard: salience alone protects the candidate.
+                # Salience guard (secondary to recency).
                 if target.salience > memory.salience:
                     logger.info("supersession blocked: protecting higher-salience %s", target.id)
                     continue
@@ -223,14 +257,41 @@ class MemoryEngine:
                     target.id, verdict.relation, verdict.confidence,
                 )
             elif verdict.relation == "duplicate":
-                # Merge: keep the higher-salience memory; no edge.
-                if target.salience >= memory.salience:
+                # Merge by recency: keep the newer, mark the older superseded.
+                if target.created_at < memory.created_at:
+                    self._meta.set_status(target.id, "superseded")
+                    superseded += 1
+                    logger.info("duplicate merge: superseded older %s for newer", target.id)
+                else:
                     memory.status = "superseded"
-                    logger.info("duplicate merge: new memory kept as superseded vs %s", target.id)
+                    logger.info("duplicate merge: new memory is older than %s; kept superseded",
+                                target.id)
                     break
-                self._meta.set_status(target.id, "superseded")
-                superseded += 1
-                logger.info("duplicate merge: superseded existing %s in favour of new", target.id)
+
+    def remember_structured(self, memory: Memory, project_id: str = "default") -> Memory:
+        """Store a pre-structured memory (skips Qwen extraction).
+
+        Still embeds and runs the normal salience, supersession, and entity-link
+        pipeline — used to inject scenario memories without extraction variance.
+        """
+        memory.project_id = project_id
+        existing = self._meta.find_by_key(project_id, memory.type.value, memory.title)
+        if existing is not None:
+            memory.id = existing.id
+
+        salience, _rationale = score_memory(self._client, memory)
+        memory.salience = salience
+        memory.status = "active"
+
+        embedding = self._client.embed([embedding_text(memory)])[0]
+        self._meta.upsert_memory(memory)
+        self._vectors.add_vector(
+            memory.id, embedding, {"project_id": project_id, "type": memory.type.value}
+        )
+        self._resolve_supersession(memory, embedding, project_id, exclude_ids={memory.id})
+        self._meta.upsert_memory(memory)  # persist any status change (dup-merge)
+        self._link_entities(memory, project_id)
+        return memory
 
     # --- Recall ------------------------------------------------------------
     def recall(
@@ -239,16 +300,18 @@ class MemoryEngine:
         project_id: str = "default",
         k: int = 5,
         pack: bool = False,
-        token_budget: int = DEFAULT_TOKEN_BUDGET,
+        token_budget: int | None = None,
         exclude_types: list[str] | None = None,
         entity: str | None = None,
     ) -> list[dict[str, Any]] | dict[str, Any]:
-        """Rank active memories by 0.7*similarity + 0.3*strength and reinforce them.
+        """Rank active memories by w_sim*similarity + w_str*strength, then reinforce.
 
+        Weights and the packing budget come from the engine's policy.
         `exclude_types` drops memories of those types. `entity` boosts memories
         linked to that code entity. With `pack=True`, also returns a
         budget-bounded packed context.
         """
+        budget = token_budget if token_budget is not None else self._policy.token_budget
         excluded = set(exclude_types or [])
         linked_ids = set(self._meta.memories_for_entity(entity)) if entity else set()
         embedding = self._client.embed([query])[0]
@@ -264,8 +327,8 @@ class MemoryEngine:
             if record.type.value in excluded:
                 continue
             similarity = 1.0 - distances.get(record.id, 1.0)
-            strength = effective_strength(record, now)
-            combined = SIMILARITY_WEIGHT * similarity + STRENGTH_WEIGHT * strength
+            strength = effective_strength(record, now, self._policy)
+            combined = self._policy.w_sim * similarity + self._policy.w_str * strength
             linked = record.id in linked_ids
             if linked:
                 combined += ENTITY_LINK_BOOST
@@ -288,7 +351,7 @@ class MemoryEngine:
             self._meta.update_access(result["id"])
 
         if pack:
-            packed = self._pack(results, token_budget, query)
+            packed = self._pack(results, budget, query)
             return {"results": results, "context": packed.model_dump()}
         return results
 
@@ -303,7 +366,7 @@ class MemoryEngine:
         self,
         question: str,
         project_id: str = "default",
-        token_budget: int = DEFAULT_TOKEN_BUDGET,
+        token_budget: int | None = None,
     ) -> dict[str, Any]:
         """Recall, pack, and synthesize a grounded answer to `question`.
 
@@ -316,7 +379,8 @@ class MemoryEngine:
             question, project_id=project_id, k=8, exclude_types=ANSWER_EXCLUDE_TYPES
         )
         assert isinstance(grounding, list)  # pack=False path returns a list
-        packed = self._pack(grounding, token_budget, question)
+        budget = token_budget if token_budget is not None else self._policy.token_budget
+        packed = self._pack(grounding, budget, question)
 
         # TODO Phase 3: verify against current code before trusting the fix.
         messages = [
@@ -356,9 +420,9 @@ class MemoryEngine:
         for memory in memories:
             if memory.status == "superseded":
                 continue
-            strength = effective_strength(memory, now)
+            strength = effective_strength(memory, now, self._policy)
             age_days = (now - memory.created_at).total_seconds() / 86400.0
-            new_status = next_status(strength, age_days)
+            new_status = next_status(strength, age_days, self._policy)
             if new_status != memory.status:
                 self._meta.set_status(memory.id, new_status)
                 transitions += 1

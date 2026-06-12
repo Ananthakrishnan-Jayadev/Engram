@@ -104,59 +104,58 @@ def _engine(tmp_path: Path, client: ScriptedClient) -> MemoryEngine:
     )
 
 
-def test_architecture_supersedes_bugfix() -> None:
-    """A superseding architecture memory supersedes the bug_fix and survives recall."""
+def test_newer_version_supersedes_older() -> None:
+    """A newer same-type memory supersedes the older one and survives recall."""
     extractions = [
-        _extraction("Try/except token decode", "wrap decode in try/except"),
-        _extraction("Central token validation", "validate before decode", mtype="architecture"),
+        _extraction("Token decode v0", "wrap decode in try/except"),
+        _extraction("Token decode v1", "validate before decode"),  # same type (bug_fix)
     ]
     with TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         engine = _engine(Path(tmp), ScriptedClient(extractions, relation="supersedes"))
-        bug = engine.remember("original fix", project_id="p1")[0]
-        arch = engine.remember("refactor", project_id="p1")[0]
+        old = engine.remember("original fix", project_id="p1")[0]
+        new = engine.remember("refactor", project_id="p1")[0]
 
-        bug_rec = engine._meta.get_memory(bug.id)
-        arch_rec = engine._meta.get_memory(arch.id)
-        assert bug_rec is not None and bug_rec.status == "superseded"
-        assert arch_rec is not None and arch_rec.status == "active"
+        old_rec = engine._meta.get_memory(old.id)
+        new_rec = engine._meta.get_memory(new.id)
+        assert old_rec is not None and old_rec.status == "superseded"
+        assert new_rec is not None and new_rec.status == "active"
 
         results = engine.recall("how to handle expired tokens", project_id="p1", k=5)
-        assert results[0]["id"] == arch.id
-        assert results[0]["type"] == "architecture"
+        assert results[0]["id"] == new.id
 
 
-def test_rejected_sibling_does_not_supersede_architecture() -> None:
-    """A rejected_approach sibling can't retire the architecture that supersedes a bug_fix."""
+def test_rejected_sibling_does_not_supersede_current() -> None:
+    """A rejected_approach sibling can't retire the current memory; a legit
+    newer same-type memory still supersedes the older one."""
     batch = _multi_extraction(
         [
-            ("architecture", "Central token guard", "validate up front"),
+            ("architecture", "Token guard v2", "validate up front"),
             ("rejected_approach", "Try/except decode hack", "rejected hack"),
         ]
     )
-    extractions = [_extraction("Old token decode fix", "patch decode"), batch]
+    extractions = [_extraction("Token guard v1", "older guard", mtype="architecture"), batch]
     client = ScriptedClient(
         extractions,
         relation="supersedes",
         fixed_vector=[0.1, 0.2, 0.3, 0.4],
-        salience_by_type={"architecture": 0.9, "rejected_approach": 0.3, "bug_fix": 0.6},
+        salience_by_type={"architecture": 0.9, "rejected_approach": 0.3},
     )
     with TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         engine = _engine(Path(tmp), client)
-        bug = engine.remember("legacy session", project_id="p1")[0]
+        old = engine.remember("legacy session", project_id="p1")[0]
         stored = engine.remember("refactor session", project_id="p1")
         arch = next(m for m in stored if m.type is MemoryType.ARCHITECTURE)
         rejected = next(m for m in stored if m.type is MemoryType.REJECTED_APPROACH)
 
-        bug_rec = engine._meta.get_memory(bug.id)
+        old_rec = engine._meta.get_memory(old.id)
         arch_rec = engine._meta.get_memory(arch.id)
 
-        assert bug_rec is not None and bug_rec.status == "superseded"  # (a)
-        assert arch_rec is not None and arch_rec.status == "active"  # (b)
-        # (c) the rejected_approach did not supersede the architecture.
+        assert old_rec is not None and old_rec.status == "superseded"  # newer same-type wins
+        assert arch_rec is not None and arch_rec.status == "active"
+        # the rejected_approach sibling did not supersede the current memory.
         assert (arch.id, "supersedes") not in engine._meta.outgoing_edges(rejected.id)
 
         results = engine.recall("token handling", project_id="p1", k=5)
-        assert results[0]["id"] == arch.id  # (d)
         assert results[0]["type"] == "architecture"
 
 

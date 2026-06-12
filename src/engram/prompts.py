@@ -84,10 +84,17 @@ A NEW memory has just been recorded. For each CANDIDATE below, decide its
 relation to the NEW memory and how the NEW memory affects it.
 
 relation must be one of:
-  - "supersedes": the NEW memory replaces/obsoletes the candidate
-  - "contradicts": the NEW memory conflicts with the candidate
+  - "supersedes": the NEW memory replaces the SAME specific fact/decision the
+    candidate states (e.g. a newer version of the same behaviour)
+  - "contradicts": the NEW memory directly conflicts with the candidate's claim
   - "duplicate": they express essentially the same knowledge
   - "unrelated": no meaningful relationship
+
+Be strict: sharing a topic is NOT enough. If they cover the same topic but a
+DIFFERENT aspect or granularity — e.g. a specific detail/note vs a general
+description, or two complementary facts that can both be true — the relation is
+"unrelated", not "supersedes". Only use "supersedes"/"contradicts" when the NEW
+memory genuinely replaces or conflicts with the candidate's specific claim.
 
 Return ONLY a JSON array; one object per candidate you have an opinion on:
   {{"target_id": "<candidate id>", "relation": "<relation>",

@@ -1,0 +1,208 @@
+{
+  "seed": 0,
+  "k": 5,
+  "mode": "direct",
+  "strategies": {
+    "no_memory": {
+      "recall": {
+        "hit_at_k": 0.0,
+        "mrr": 0.0
+      },
+      "stale_hit_rate": 0.0,
+      "forgetting": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recheck": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "curve": [
+        0.0,
+        0.0
+      ],
+      "gold_miss": [
+        {
+          "query": "how does auth handle_auth work now?",
+          "gold_key": "auth-v0",
+          "rank": null,
+          "hit": false,
+          "reason": "excluded:absent"
+        },
+        {
+          "query": "what does auth handle_auth do for detail case 0?",
+          "gold_key": "auth-note-0",
+          "rank": null,
+          "hit": false,
+          "reason": "excluded:absent"
+        },
+        {
+          "query": "how does cache handle_cache work now?",
+          "gold_key": "cache-v1",
+          "rank": null,
+          "hit": false,
+          "reason": "excluded:absent"
+        },
+        {
+          "query": "what does cache handle_cache do for detail case 0?",
+          "gold_key": "cache-note-0",
+          "rank": null,
+          "hit": false,
+          "reason": "excluded:absent"
+        },
+        {
+          "query": "how does billing handle_billing work now?",
+          "gold_key": "billing-v1",
+          "rank": null,
+          "hit": false,
+          "reason": "excluded:absent"
+        },
+        {
+          "query": "what does billing handle_billing do for detail case 0?",
+          "gold_key": "billing-note-0",
+          "rank": null,
+          "hit": false,
+          "reason": "excluded:absent"
+        }
+      ]
+    },
+    "naive_all": {
+      "recall": {
+        "hit_at_k": 1.0,
+        "mrr": 1.0
+      },
+      "stale_hit_rate": 0.3333333333333333,
+      "forgetting": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "recheck": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "curve": [
+        0.6666666666666666,
+        1.0
+      ],
+      "gold_miss": [
+        {
+          "query": "how does auth handle_auth work now?",
+          "gold_key": "auth-v0",
+          "rank": 1,
+          "hit": true,
+          "reason": "hit"
+        },
+        {
+          "query": "what does auth handle_auth do for detail case 0?",
+          "gold_key": "auth-note-0",
+          "rank": 1,
+          "hit": true,
+          "reason": "hit"
+        },
+        {
+          "query": "how does cache handle_cache work now?",
+          "gold_key": "cache-v1",
+          "rank": 1,
+          "hit": true,
+          "reason": "hit"
+        },
+        {
+          "query": "what does cache handle_cache do for detail case 0?",
+          "gold_key": "cache-note-0",
+          "rank": 1,
+          "hit": true,
+          "reason": "hit"
+        },
+        {
+          "query": "how does billing handle_billing work now?",
+          "gold_key": "billing-v1",
+          "rank": 1,
+          "hit": true,
+          "reason": "hit"
+        },
+        {
+          "query": "what does billing handle_billing do for detail case 0?",
+          "gold_key": "billing-note-0",
+          "rank": 1,
+          "hit": true,
+          "reason": "hit"
+        }
+      ]
+    },
+    "engram": {
+      "recall": {
+        "hit_at_k": 0.5,
+        "mrr": 0.5
+      },
+      "stale_hit_rate": 0.0,
+      "forgetting": {
+        "precision": 0.3333333333333333,
+        "recall": 1.0,
+        "f1": 0.5
+      },
+      "recheck": {
+        "precision": 0.5,
+        "recall": 0.75,
+        "f1": 0.6
+      },
+      "curve": [
+        0.5,
+        0.5
+      ],
+      "packing": {
+        "packed_tokens": 618.0,
+        "naive_tokens": 618.0,
+        "token_ratio": 1.0,
+        "gold_retention": 0.5
+      },
+      "gold_miss": [
+        {
+          "query": "how does auth handle_auth work now?",
+          "gold_key": "auth-v0",
+          "rank": 1,
+          "hit": true,
+          "reason": "hit"
+        },
+        {
+          "query": "what does auth handle_auth do for detail case 0?",
+          "gold_key": "auth-note-0",
+          "rank": 1,
+          "hit": true,
+          "reason": "hit"
+        },
+        {
+          "query": "how does cache handle_cache work now?",
+          "gold_key": "cache-v1",
+          "rank": 1,
+          "hit": true,
+          "reason": "hit"
+        },
+        {
+          "query": "what does cache handle_cache do for detail case 0?",
+          "gold_key": "cache-note-0",
+          "rank": null,
+          "hit": false,
+          "reason": "excluded:superseded"
+        },
+        {
+          "query": "how does billing handle_billing work now?",
+          "gold_key": "billing-v1",
+          "rank": null,
+          "hit": false,
+          "reason": "excluded:superseded"
+        },
+        {
+          "query": "what does billing handle_billing do for detail case 0?",
+          "gold_key": "billing-note-0",
+          "rank": null,
+          "hit": false,
+          "reason": "excluded:superseded"
+        }
+      ]
+    }
+  }
+}
