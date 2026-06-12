@@ -50,6 +50,30 @@ python scripts/demo_capture.py
 python scripts/demo_engine.py
 ```
 
+## Dashboard (Phase 5)
+
+A FastAPI read API + React dashboard that visualizes the memory graph,
+supersession events, decay curves, and benchmark metrics.
+
+```bash
+# 1. Seed the demo project (live key): bootstrap + supersession + edit/sync
+python scripts/seed_dashboard.py
+
+# 2. Start the API (terminal 1)
+uvicorn engram.api.app:app --port 8000
+
+# 3. Start the dashboard (terminal 2)
+cd frontend
+npm install
+npm run dev          # http://localhost:5173  (proxies /api -> :8000)
+```
+
+Views: **Graph** (React Flow knowledge graph — superseded nodes dimmed, stale
+ones badged), **Events** (live decision feed: remember / superseded / blocked /
+flagged / recheck), **Memories** (filterable cards + explainability panel),
+**Metrics** (benchmark comparison from `eval/results/latest.json`), and
+**Decay** (strength-over-time curves).
+
 ## Phase 1 usage — the capture path
 
 Phase 1 implements **extract → store → recall**. The `MemoryEngine` reads raw content

@@ -30,10 +30,7 @@ class Verdict(BaseModel):
 def _format_candidates(candidates: list[Memory]) -> str:
     """Render candidates as an id-tagged block for the prompt."""
     return "\n".join(
-        f"- id: {c.id}\n"
-        f"  type: {c.type.value}\n"
-        f"  title: {c.title}\n"
-        f"  body: {c.body}"
+        f"- id: {c.id}\n  type: {c.type.value}\n  title: {c.title}\n  body: {c.body}"
         for c in candidates
     )
 

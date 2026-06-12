@@ -72,10 +72,7 @@ def main() -> None:
         print(f"  original '{old.title}' -> status = {old.status.upper()}")
         edges = []
         for mem in refactor:
-            edges += [
-                (mem.title, dst, kind)
-                for dst, kind in engine._meta.outgoing_edges(mem.id)
-            ]
+            edges += [(mem.title, dst, kind) for dst, kind in engine._meta.outgoing_edges(mem.id)]
         for src_title, dst, kind in edges:
             print(f"  edge: '{src_title}' --{kind}--> {dst}")
 

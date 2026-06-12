@@ -52,8 +52,7 @@ DIAG_K = 50
 def _evaluate(strategy: Strategy, scenario: Scenario, k: int) -> list[QueryOutcome]:
     """Run every query against `strategy` at its current state."""
     return [
-        QueryOutcome(q.gold_key, q.stale_keys, strategy.query(q.text, k))
-        for q in scenario.queries
+        QueryOutcome(q.gold_key, q.stale_keys, strategy.query(q.text, k)) for q in scenario.queries
     ]
 
 
@@ -180,7 +179,9 @@ def run_repeated(
     results = []
     for i in range(runs):
         emit(f"Run {i + 1}/{runs}")
-        results.append(run_benchmark(scenario, strategy_factory(), k=k, mode=mode, progress=progress))
+        results.append(
+            run_benchmark(scenario, strategy_factory(), k=k, mode=mode, progress=progress)
+        )
 
     names = list(results[0].per_strategy)
     aggregate: dict[str, dict[str, dict[str, float]]] = {}
@@ -198,6 +199,4 @@ def run_repeated(
             }
         aggregate[name] = per_metric
 
-    return AggregateResults(
-        seed=scenario.seed, k=k, mode=mode, runs=runs, per_strategy=aggregate
-    )
+    return AggregateResults(seed=scenario.seed, k=k, mode=mode, runs=runs, per_strategy=aggregate)

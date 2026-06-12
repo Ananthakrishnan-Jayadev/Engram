@@ -49,8 +49,7 @@ class ChromaVectorStore(StorageInterface):
         ids = result.get("ids", [[]])[0]
         distances = (result.get("distances") or [[]])[0]
         return [
-            (_id, float(distances[i]) if i < len(distances) else 1.0)
-            for i, _id in enumerate(ids)
+            (_id, float(distances[i]) if i < len(distances) else 1.0) for i, _id in enumerate(ids)
         ]
 
     def query_candidates(

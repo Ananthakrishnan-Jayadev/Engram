@@ -15,7 +15,10 @@ class FakeEngine:
     """Stand-in engine returning canned values for the MCP tools."""
 
     def remember(
-        self, content: str, project_id: str = "default", hint: str | None = None,
+        self,
+        content: str,
+        project_id: str = "default",
+        hint: str | None = None,
         source: str = "mcp",
     ) -> list[Memory]:
         """Return one canned stored memory."""
@@ -30,13 +33,15 @@ class FakeEngine:
         ]
 
     def recall(
-        self, query: str, project_id: str = "default", k: int = 5,
-        pack: bool = False, token_budget: int = 1500,
+        self,
+        query: str,
+        project_id: str = "default",
+        k: int = 5,
+        pack: bool = False,
+        token_budget: int = 1500,
     ) -> list[dict[str, Any]]:
         """Return one canned recall result."""
-        return [
-            {"id": "m1", "type": "bug_fix", "title": "Auth crash", "body": "b", "score": 0.9}
-        ]
+        return [{"id": "m1", "type": "bug_fix", "title": "Auth crash", "body": "b", "score": 0.9}]
 
     def answer(self, question: str, project_id: str = "default") -> dict[str, Any]:
         """Return a canned synthesized answer."""
@@ -45,8 +50,12 @@ class FakeEngine:
     def feedback(self, memory_id: str, helpful: bool) -> Memory:
         """Return a canned updated memory."""
         return Memory(
-            id=memory_id, project_id="p1", type=MemoryType.BUG_FIX,
-            title="t", body="b", salience=0.7,
+            id=memory_id,
+            project_id="p1",
+            type=MemoryType.BUG_FIX,
+            title="t",
+            body="b",
+            salience=0.7,
         )
 
     def stats(self, project_id: str = "default") -> dict[str, Any]:

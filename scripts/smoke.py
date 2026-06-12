@@ -43,9 +43,7 @@ def main() -> None:
     # Step 2: chat --------------------------------------------------------
     try:
         assert client is not None, "client unavailable (settings failed)"
-        reply = client.chat(
-            [{"role": "user", "content": "Reply with exactly: ok"}]
-        )
+        reply = client.chat([{"role": "user", "content": "Reply with exactly: ok"}])
         print(f"✅ 2. Chat (flash) replied: {reply!r}")
         results["chat"] = True
     except Exception as exc:  # noqa: BLE001

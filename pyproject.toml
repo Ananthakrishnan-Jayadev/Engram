@@ -17,6 +17,8 @@ dependencies = [
     "pydantic-settings",
     "python-dotenv",
     "mcp",
+    "fastapi",
+    "uvicorn",
 ]
 
 [project.optional-dependencies]

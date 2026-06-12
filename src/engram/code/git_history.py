@@ -14,12 +14,18 @@ DIFF_CHAR_CAP = 1500
 
 
 def _run_git(repo: str | Path, args: list[str]) -> str | None:
-    """Run `git -C <repo> <args>`; return stdout, or None on any failure."""
+    """Run `git -C <repo> <args>`; return stdout, or None on any failure.
+
+    Output is decoded as UTF-8 (with replacement), never the platform default
+    (Windows cp1252), so non-ASCII commit messages/diffs cannot crash the reader.
+    """
     try:
         result = subprocess.run(
             ["git", "-C", str(repo), *args],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=_GIT_TIMEOUT,
             check=False,
         )
@@ -46,9 +52,7 @@ def recent_commits(repo: str | Path, n: int = 20) -> list[dict[str, str]]:
         parts = line.split(_SEP)
         if len(parts) < 4:
             continue
-        commits.append(
-            {"sha": parts[0], "author": parts[1], "date": parts[2], "subject": parts[3]}
-        )
+        commits.append({"sha": parts[0], "author": parts[1], "date": parts[2], "subject": parts[3]})
     return commits
 
 

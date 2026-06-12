@@ -91,9 +91,7 @@ class SqliteMetadataStore(StorageInterface):
     def get_memory(self, id: str) -> Memory | None:
         """Fetch a memory record by id, or `None` if it does not exist."""
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM memories WHERE id = ?", (id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM memories WHERE id = ?", (id,)).fetchone()
         if row is None:
             return None
         return self._row_to_memory(row)
@@ -170,6 +168,65 @@ class SqliteMetadataStore(StorageInterface):
             ).fetchall()
         return [(row["dst_id"], row["kind"]) for row in rows]
 
+    def incoming_edges(self, dst_id: str) -> list[tuple[str, str]]:
+        """Return (src_id, kind) edges pointing at `dst_id`."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT src_id, kind FROM edges WHERE dst_id = ?", (dst_id,)
+            ).fetchall()
+        return [(row["src_id"], row["kind"]) for row in rows]
+
+    def all_edges(self, ids: list[str]) -> list[tuple[str, str, str]]:
+        """Return (src, dst, kind) edges where both ends are in `ids`."""
+        if not ids:
+            return []
+        placeholders = ",".join("?" * len(ids))
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT src_id, dst_id, kind FROM edges "
+                f"WHERE src_id IN ({placeholders}) AND dst_id IN ({placeholders})",
+                ids + ids,
+            ).fetchall()
+        return [(row["src_id"], row["dst_id"], row["kind"]) for row in rows]
+
+    def list_projects(self) -> list[str]:
+        """Return the distinct project ids present in the memories table."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT project_id FROM memories ORDER BY project_id"
+            ).fetchall()
+        return [row["project_id"] for row in rows]
+
+    # --- Event log ---------------------------------------------------------
+    def record_event(
+        self, project_id: str, kind: str, memory_id: str | None = None, detail: str = ""
+    ) -> None:
+        """Append a decision event to the event log."""
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO events (id, ts, project_id, kind, memory_id, detail) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    uuid.uuid4().hex,
+                    datetime.now(UTC).isoformat(),
+                    project_id,
+                    kind,
+                    memory_id,
+                    detail,
+                ),
+            )
+            conn.commit()
+
+    def list_events(self, project_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        """Return up to `limit` events for `project_id`, newest first."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT id, ts, project_id, kind, memory_id, detail FROM events "
+                "WHERE project_id = ? ORDER BY ts DESC, id DESC LIMIT ?",
+                (project_id, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def count_by_type(self, project_id: str) -> dict[str, int]:
         """Return a mapping of memory type -> count for `project_id`."""
         with self._connect() as conn:
@@ -208,6 +265,7 @@ class SqliteMetadataStore(StorageInterface):
             conn.execute("DELETE FROM memories WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM code_entities WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM memory_entities WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM events WHERE project_id = ?", (project_id,))
             if ids:
                 placeholders = ",".join("?" * len(ids))
                 conn.execute(
@@ -215,9 +273,7 @@ class SqliteMetadataStore(StorageInterface):
                     f"OR dst_id IN ({placeholders})",
                     ids + ids,
                 )
-                conn.execute(
-                    f"DELETE FROM feedback WHERE memory_id IN ({placeholders})", ids
-                )
+                conn.execute(f"DELETE FROM feedback WHERE memory_id IN ({placeholders})", ids)
             conn.commit()
 
     # --- Code knowledge graph --------------------------------------------

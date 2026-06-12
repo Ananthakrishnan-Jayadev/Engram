@@ -86,9 +86,7 @@ def _changed_target_ids(engine: MemoryEngine, entity_key: str) -> list[str]:
     return ids
 
 
-def _supersede_removed(
-    engine: MemoryEngine, entity_key: str, counters: dict[str, int]
-) -> None:
+def _supersede_removed(engine: MemoryEngine, entity_key: str, counters: dict[str, int]) -> None:
     """A removed entity retires its linked memories outright (gone is gone)."""
     memory_ids = engine._meta.memories_for_entity(entity_key)
     for memory in engine._meta.get_memories(memory_ids, include_inactive=True):
@@ -96,6 +94,12 @@ def _supersede_removed(
             continue
         engine._meta.set_status(memory.id, "superseded")
         counters["superseded"] += 1
+        engine._record_event(
+            memory.project_id,
+            "superseded",
+            memory.id,
+            f"linked entity {entity_key} was removed",
+        )
 
 
 def _clear_stale_flags(engine: MemoryEngine, project_id: str, flagged_ids: set[str]) -> None:
@@ -143,12 +147,25 @@ def run_sync(engine: MemoryEngine, project_id: str, project_path: str) -> dict[s
             rechecked_ids.add(memory.id)
             verdict = _recheck_one(engine._client, memory, key, source)
             counters["rechecked"] += 1
+            engine._record_event(project_id, "recheck", memory.id, f"entity {key} changed")
             action = _apply_verdict(engine, memory, verdict)
             if action == "superseded":
                 counters["superseded"] += 1
+                engine._record_event(
+                    project_id,
+                    "superseded",
+                    memory.id,
+                    f"recheck: outdated vs current source of {key}",
+                )
             else:  # deterministic flag
                 counters["flagged"] += 1
                 flagged_ids.add(memory.id)
+                engine._record_event(
+                    project_id,
+                    "flagged",
+                    memory.id,
+                    f"needs_update: {key} changed",
+                )
     for key in removed:
         _supersede_removed(engine, key, counters)
 

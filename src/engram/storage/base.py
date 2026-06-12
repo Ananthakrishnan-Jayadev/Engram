@@ -22,9 +22,7 @@ class StorageInterface(ABC):
 
     # --- Vector operations -------------------------------------------------
     @abstractmethod
-    def add_vector(
-        self, id: str, embedding: list[float], metadata: dict[str, Any]
-    ) -> None:
+    def add_vector(self, id: str, embedding: list[float], metadata: dict[str, Any]) -> None:
         """Store a precomputed `embedding` under `id` with `metadata`."""
 
     @abstractmethod

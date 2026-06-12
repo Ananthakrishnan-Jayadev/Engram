@@ -60,10 +60,7 @@ def main() -> None:
         results = engine.recall(query, project_id=PROJECT_ID, k=5)
         print(f"\n✅ recall({query!r}) returned {len(results)} results:")
         for rank, result in enumerate(results, start=1):
-            print(
-                f"   {rank}. ({result['score']:.3f}) "
-                f"[{result['type']}] {result['title']}"
-            )
+            print(f"   {rank}. ({result['score']:.3f}) [{result['type']}] {result['title']}")
             print(f"       {result['body']}")
     except Exception as exc:  # noqa: BLE001
         print(f"❌ recall failed: {exc}")

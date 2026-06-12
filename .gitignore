@@ -62,6 +62,8 @@ coverage.xml
 chroma_db/
 *.sqlite
 *.sqlite3
+.demo_project/
+eval/results/
 
 # ---------- ML / data artifacts ----------
 *.ckpt

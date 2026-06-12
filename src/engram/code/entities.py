@@ -192,9 +192,7 @@ def entity_source(root: str | Path, entity: CodeEntity) -> str | None:
     return None
 
 
-def match_entities(
-    hint: str, entities: list[CodeEntity], cap: int = ENTITY_MATCH_CAP
-) -> list[str]:
+def match_entities(hint: str, entities: list[CodeEntity], cap: int = ENTITY_MATCH_CAP) -> list[str]:
     """Resolve a free-text `hint` to entity keys (exact > symbol > path).
 
     Tries, in order: exact entity_key, qualname or trailing symbol, then full
@@ -213,8 +211,6 @@ def match_entities(
         return symbol_matches[:cap]
 
     path_matches = [
-        e.entity_key
-        for e in entities
-        if e.path == hint or e.path.rsplit("/", 1)[-1] == hint
+        e.entity_key for e in entities if e.path == hint or e.path.rsplit("/", 1)[-1] == hint
     ]
     return path_matches[:cap]

@@ -57,7 +57,9 @@ def main() -> None:
     )
     parser.add_argument("--e2e", action="store_true", help="real Qwen extraction (default)")
     parser.add_argument("--fit", action="store_true", help="fit + save the forgetting policy")
-    parser.add_argument("--verbose", action="store_true", help="print per-query gold-miss breakdown")
+    parser.add_argument(
+        "--verbose", action="store_true", help="print per-query gold-miss breakdown"
+    )
     args = parser.parse_args()
 
     # Surface the engine's existing INFO logs as live progress, but keep the
@@ -94,7 +96,10 @@ def main() -> None:
                 NoMemory(),
                 NaiveAll(engine._client.embed),
                 EngramStrategy(
-                    engine, proj, project_id="bench", mode=mode,
+                    engine,
+                    proj,
+                    project_id="bench",
+                    mode=mode,
                     transcripts=scenario.transcripts,
                 ),
             ]
@@ -124,7 +129,11 @@ def main() -> None:
         if args.fit:
             print("\nFitting forgetting policy...", flush=True)
             fitted, report = fit_policy(
-                scenario, engine, proj, project_id="fit", mode=mode,
+                scenario,
+                engine,
+                proj,
+                project_id="fit",
+                mode=mode,
                 out_path="eval/results/policy.json",
             )
             print(

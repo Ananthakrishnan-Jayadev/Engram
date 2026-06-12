@@ -110,9 +110,7 @@ CANDIDATES
 """
 
 
-def build_supersession_prompt(
-    new_type: str, new_title: str, new_body: str, candidates: str
-) -> str:
+def build_supersession_prompt(new_type: str, new_title: str, new_body: str, candidates: str) -> str:
     """Render the supersession comparison prompt."""
     return _SUPERSESSION_TEMPLATE.format(
         new_type=new_type,

@@ -59,12 +59,24 @@ CREATE TABLE IF NOT EXISTS memory_entities (
 );
 """
 
+CREATE_EVENTS_TABLE = """
+CREATE TABLE IF NOT EXISTS events (
+    id         TEXT PRIMARY KEY,
+    ts         TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    kind       TEXT NOT NULL,
+    memory_id  TEXT,
+    detail     TEXT NOT NULL DEFAULT ''
+);
+"""
+
 SCHEMA_STATEMENTS: tuple[str, ...] = (
     CREATE_MEMORIES_TABLE,
     CREATE_EDGES_TABLE,
     CREATE_FEEDBACK_TABLE,
     CREATE_CODE_ENTITIES_TABLE,
     CREATE_MEMORY_ENTITIES_TABLE,
+    CREATE_EVENTS_TABLE,
 )
 
 # Columns that migrate() can add in-place to an existing `memories` table.

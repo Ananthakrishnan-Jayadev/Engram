@@ -58,7 +58,9 @@ def run_bootstrap(engine: MemoryEngine, project_id: str, project_path: str) -> d
     docs = _read_docs(root)
     if docs.strip():
         engine.remember(
-            docs, project_id=project_id, source="bootstrap:docs",
+            docs,
+            project_id=project_id,
+            source="bootstrap:docs",
             hint="architecture and conventions",
         )
 
@@ -66,8 +68,10 @@ def run_bootstrap(engine: MemoryEngine, project_id: str, project_path: str) -> d
     commits = recent_commits(root, n=_BOOTSTRAP_COMMITS)
     if commits:
         engine.remember(
-            _format_commits(root, commits), project_id=project_id,
-            source="bootstrap:git", hint="bug fixes and decisions",
+            _format_commits(root, commits),
+            project_id=project_id,
+            source="bootstrap:git",
+            hint="bug fixes and decisions",
         )
 
     # 4. Backfill any stashed entity-hint links (remember already links live).

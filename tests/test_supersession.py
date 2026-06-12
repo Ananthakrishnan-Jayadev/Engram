@@ -24,9 +24,7 @@ def _memory(mid: str, title: str) -> Memory:
 
 def _verdict(target_id: str, relation: str, confidence: float = 0.9) -> str:
     """Build a one-element verdict JSON payload."""
-    return json.dumps(
-        [{"target_id": target_id, "relation": relation, "confidence": confidence}]
-    )
+    return json.dumps([{"target_id": target_id, "relation": relation, "confidence": confidence}])
 
 
 class VerdictClient:
@@ -161,8 +159,13 @@ class _RelationClient:
 def _typed_memory(mid: str, mtype: MemoryType, created_at: datetime) -> Memory:
     """Build a memory of a given type and creation time."""
     return Memory(
-        id=mid, project_id="p1", type=mtype, title=mid, body=f"{mid} body",
-        created_at=created_at, salience=0.6,
+        id=mid,
+        project_id="p1",
+        type=mtype,
+        title=mid,
+        body=f"{mid} body",
+        created_at=created_at,
+        salience=0.6,
     )
 
 

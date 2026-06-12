@@ -234,8 +234,7 @@ class EngramStrategy:
             context = res["context"]
             packed += int(context["est_tokens"])
             naive += sum(
-                estimate_tokens(f"[{r['type']}] {r['title']}\n{r['body']}")
-                for r in res["results"]
+                estimate_tokens(f"[{r['type']}] {r['title']}\n{r['body']}") for r in res["results"]
             )
             total += 1
             gold_id = self._id_by_key.get(query.gold_key)

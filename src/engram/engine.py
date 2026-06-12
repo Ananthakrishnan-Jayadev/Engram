@@ -113,6 +113,13 @@ class MemoryEngine:
         self._meta.reset_project(project_id)
         self._vectors.reset_project(project_id)
 
+    def _record_event(
+        self, project_id: str, kind: str, memory_id: str | None = None, detail: str = ""
+    ) -> None:
+        """Persist a decision event (the dashboard's activity feed) and log it."""
+        self._meta.record_event(project_id, kind, memory_id, detail)
+        logger.info("%s: %s %s", kind, memory_id or "-", detail)
+
     # --- Capture -----------------------------------------------------------
     def remember(
         self,
@@ -149,6 +156,9 @@ class MemoryEngine:
 
         sibling_ids = {mem.id for mem, _ in prepared}
         for memory, embedding in prepared:
+            self._record_event(
+                project_id, "remember", memory.id, f"[{memory.type.value}] {memory.title}"
+            )
             self._resolve_supersession(memory, embedding, project_id, exclude_ids=sibling_ids)
             self._meta.upsert_memory(memory)  # persist any status change (e.g. dup-merge)
             self._link_entities(memory, project_id)
@@ -214,9 +224,11 @@ class MemoryEngine:
             if verdict.relation == "unrelated":
                 continue
             if verdict.confidence < self._policy.supersede_min_confidence:
-                logger.info(
-                    "supersession skipped: low confidence %.2f for %s",
-                    verdict.confidence, target.id,
+                self._record_event(
+                    project_id,
+                    "supersession_blocked",
+                    target.id,
+                    f"low confidence {verdict.confidence:.2f}",
                 )
                 continue
 
@@ -224,14 +236,18 @@ class MemoryEngine:
                 # Temporal direction (primary): only an older candidate can be
                 # retired by a newer memory — never the reverse.
                 if target.created_at >= memory.created_at:
-                    logger.info("supersession blocked: candidate %s not older", target.id)
+                    self._record_event(
+                        project_id, "supersession_blocked", target.id, "candidate not older"
+                    )
                     continue
                 # Same-claim: only replace a candidate of the same type (a
                 # detail/note never supersedes a general version, etc.).
                 if target.type is not memory.type:
-                    logger.info(
-                        "supersession blocked: different type (%s vs %s) for %s",
-                        memory.type.value, target.type.value, target.id,
+                    self._record_event(
+                        project_id,
+                        "supersession_blocked",
+                        target.id,
+                        f"different type ({memory.type.value} vs {target.type.value})",
                     )
                     continue
                 # Type authority: a rejected_approach can only relate to another
@@ -240,32 +256,50 @@ class MemoryEngine:
                     memory.type is MemoryType.REJECTED_APPROACH
                     and target.type is not MemoryType.REJECTED_APPROACH
                 ):
-                    logger.info(
-                        "supersession blocked: rejected_approach cannot supersede %s",
+                    self._record_event(
+                        project_id,
+                        "supersession_blocked",
                         target.id,
+                        "rejected_approach cannot supersede real knowledge",
                     )
                     continue
                 # Salience guard (secondary to recency).
                 if target.salience > memory.salience:
-                    logger.info("supersession blocked: protecting higher-salience %s", target.id)
+                    self._record_event(
+                        project_id,
+                        "supersession_blocked",
+                        target.id,
+                        "protected: higher salience than the new memory",
+                    )
                     continue
                 self._meta.set_status(target.id, "superseded")
                 self._meta.add_edge(memory.id, target.id, "supersedes")
                 superseded += 1
-                logger.info(
-                    "superseded %s via %s (conf=%.2f)",
-                    target.id, verdict.relation, verdict.confidence,
+                self._record_event(
+                    project_id,
+                    "superseded",
+                    target.id,
+                    f"by '{memory.title}' via {verdict.relation} (conf={verdict.confidence:.2f})",
                 )
             elif verdict.relation == "duplicate":
                 # Merge by recency: keep the newer, mark the older superseded.
                 if target.created_at < memory.created_at:
                     self._meta.set_status(target.id, "superseded")
                     superseded += 1
-                    logger.info("duplicate merge: superseded older %s for newer", target.id)
+                    self._record_event(
+                        project_id,
+                        "duplicate_merge",
+                        target.id,
+                        f"older duplicate retired in favour of '{memory.title}'",
+                    )
                 else:
                     memory.status = "superseded"
-                    logger.info("duplicate merge: new memory is older than %s; kept superseded",
-                                target.id)
+                    self._record_event(
+                        project_id,
+                        "duplicate_merge",
+                        memory.id,
+                        f"new memory is older duplicate of '{target.title}'; kept superseded",
+                    )
                     break
 
     def remember_structured(self, memory: Memory, project_id: str = "default") -> Memory:
@@ -287,6 +321,9 @@ class MemoryEngine:
         self._meta.upsert_memory(memory)
         self._vectors.add_vector(
             memory.id, embedding, {"project_id": project_id, "type": memory.type.value}
+        )
+        self._record_event(
+            project_id, "remember", memory.id, f"[{memory.type.value}] {memory.title}"
         )
         self._resolve_supersession(memory, embedding, project_id, exclude_ids={memory.id})
         self._meta.upsert_memory(memory)  # persist any status change (dup-merge)
@@ -355,9 +392,7 @@ class MemoryEngine:
             return {"results": results, "context": packed.model_dump()}
         return results
 
-    def _pack(
-        self, results: list[dict[str, Any]], token_budget: int, query: str
-    ) -> PackedContext:
+    def _pack(self, results: list[dict[str, Any]], token_budget: int, query: str) -> PackedContext:
         """Pack `results` into a token-bounded context."""
         return pack(results, token_budget, query, self._client)
 

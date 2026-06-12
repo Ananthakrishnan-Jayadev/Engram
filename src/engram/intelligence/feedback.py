@@ -10,9 +10,7 @@ from engram.storage.metadata_store import SqliteMetadataStore
 FEEDBACK_DELTA = 0.1
 
 
-def apply_feedback(
-    store: SqliteMetadataStore, memory_id: str, helpful: bool
-) -> Memory | None:
+def apply_feedback(store: SqliteMetadataStore, memory_id: str, helpful: bool) -> Memory | None:
     """Apply a feedback signal to a memory and log the event.
 
     helpful -> bump salience and refresh last access; not-helpful -> lower

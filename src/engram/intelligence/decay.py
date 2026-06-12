@@ -47,9 +47,7 @@ def effective_strength(
     return clamp01(memory.salience * decay * access_boost)
 
 
-def next_status(
-    strength: float, age_days: float, policy: ForgettingPolicy | None = None
-) -> str:
+def next_status(strength: float, age_days: float, policy: ForgettingPolicy | None = None) -> str:
     """Map `strength` (and age) to a decay status: active/dormant/forgotten."""
     policy = policy or DEFAULT_POLICY
     if strength < policy.forgotten_threshold and age_days >= policy.grace_period_days:

@@ -24,9 +24,7 @@ def _extraction(title: str, body: str, mtype: str = "bug_fix") -> str:
 
 def _multi_extraction(items: list[tuple[str, str, str]]) -> str:
     """Build a multi-memory extraction payload from (type, title, body) tuples."""
-    return json.dumps(
-        [{"type": t, "title": ttl, "body": b, "details": {}} for t, ttl, b in items]
-    )
+    return json.dumps([{"type": t, "title": ttl, "body": b, "details": {}} for t, ttl, b in items])
 
 
 class ScriptedClient:
